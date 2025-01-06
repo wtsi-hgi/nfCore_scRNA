@@ -178,9 +178,11 @@ process cellbender__preprocess_output{
 
   output:
     tuple(val(experiment_id),path("cellbender-FPR_${params.cellbender_resolution_to_use}-filtered_10x_mtx"), emit: alternative_input)
+    tuple(val(experiment_id),path("cellbender-FPR_${params.cellbender_resolution_to_use}-unfiltered_10x_mtx"), emit: alternative_input_raw)
     path("*filtered_10x_mtx/barcodes.tsv.gz", emit: tenx_barcodes)
     path("*filtered_10x_mtx/features.tsv.gz", emit: tenx_features)
     path("*filtered_10x_mtx/matrix.mtx.gz", emit: tenx_matrix)
+    path("Warnings.log") optional true
     path(
       "${outfile}-filtered_10x_mtx-file_list.tsv",
        emit: results_list

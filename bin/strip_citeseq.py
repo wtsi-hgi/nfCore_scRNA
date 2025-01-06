@@ -110,12 +110,14 @@ def cellbender_to_tenxmatrix(adata,out_file='',out_dir='tenx_from_adata',verbose
         )
     df_features = pd.DataFrame(
         data=[
-            adata.var.loc[:, gene_var].values,
             adata.var.index.values,
+            adata.var.loc[:, gene_var].values,
             adata.var.feature_types.values
         ]
-    ).T
-
+    )
+    if df_features.shape[0]<df_features.shape[1]:
+        df_features=df_features.T
+    
     df_features.to_csv(
         out_f,
         sep='\t',

@@ -17,7 +17,7 @@ import gzip
 import pandas as pd
 import numpy as np
 import anndata
-
+filter_0_count_cells=False
 
 def dict_from_h5(file: str) -> Dict[str, np.ndarray]:
     """Read in everything from an h5 file and put into a dictionary."""
@@ -29,10 +29,7 @@ def dict_from_h5(file: str) -> Dict[str, np.ndarray]:
     return d
 
 
-def anndata_from_h5(
-    file: str,
-    analyzed_barcodes_only: bool = True
-) -> 'anndata.AnnData':
+def anndata_from_h5(file: str,analyzed_barcodes_only: bool = True) -> 'anndata.AnnData':
     """Load an output h5 file into an AnnData object for downstream work.
 
     Args:
@@ -82,12 +79,16 @@ def anndata_from_h5(
         obs={'barcode': d.pop('barcodes').astype(str)},
         var={
             'gene_ids': d.pop('id').astype(str),
-            'gene_symbols': gene_symbols
+            'gene_symbols': gene_symbols,
+            'feature_type':d.pop('feature_type').astype(str),
         }
     )
+    # adata = adata[:,adata.var.query('feature_type=="Gene Expression"').index]
     adata.obs.set_index('barcode', inplace=True)
     adata.var.set_index('gene_ids', inplace=True)
-
+    
+    
+    
     # Add other information to the adata object in the appropriate slot.
     for key, value in d.items():
         try:
@@ -125,12 +126,8 @@ def anndata_from_h5(
     return adata
 
 
-def cellbender_to_tenxmatrix(
-    adata,
-    out_file='',
-    out_dir='tenx_from_adata',
-    verbose=True
-):
+
+def cellbender_to_tenxmatrix(adata,out_file='',out_dir='tenx_from_adata',verbose=True):
     """Write 10x like data from 10x H5.
 
     Parameters
@@ -164,13 +161,14 @@ def cellbender_to_tenxmatrix(
         compression_opts = dict(method='gzip', compresslevel=9)
 
     # First filter out any cells that have 0 total counts
-    zero_count_cells = adata.obs_names[np.where(adata.X.sum(axis=1) == 0)[0]]
-    if verbose:
-        print("Filtering {}/{} cells with 0 counts.".format(
-            len(zero_count_cells),
-            adata.n_obs
-        ))
-    adata = adata[adata.obs_names.difference(zero_count_cells, sort=False)]
+    if(filter_0_count_cells):
+        zero_count_cells = adata.obs_names[np.where(adata.X.sum(axis=1) == 0)[0]]
+        if verbose:
+            print("Filtering {}/{} cells with 0 counts.".format(
+                len(zero_count_cells),
+                adata.n_obs
+            ))
+        adata = adata[adata.obs_names.difference(zero_count_cells, sort=False)]
 
     # Save the barcodes.
     out_f = os.path.join(
@@ -198,10 +196,11 @@ def cellbender_to_tenxmatrix(
         print('Writing {}'.format(out_f))
 
     # Check if read in by gene_symbol or gene_id
-    if 'gene_ids' in adata.var.columns:
-        gene_var = 'gene_ids'
-    elif 'gene_symbols' in adata.var.columns:
+
+    if 'gene_symbols' in adata.var.columns:
         gene_var = 'gene_symbols'
+    elif 'gene_ids' in adata.var.columns:
+        gene_var = 'gene_ids'
     # elif 'id' in adata.var.columns:
     #     gene_var = 'id'
     # elif 'name' in adata.var.columns:
@@ -210,13 +209,22 @@ def cellbender_to_tenxmatrix(
         raise Exception(
             'Could not find "gene_symbols" or "gene_ids" in adata.var'
         )
-    df_features = pd.DataFrame(
-        data=[
-            adata.var.index.values,
-            adata.var.loc[:, gene_var].values,
-            adata.var['feature_type']
-        ]
-    ).T
+    try:
+        df_features = pd.DataFrame(
+            data=[
+                adata.var.loc[:, gene_var].values,
+                adata.var.index.values,
+                adata.var.feature_type.values
+            ]
+        ).T
+    except:
+        df_features = pd.DataFrame(
+            data=[
+                adata.var.loc[:, gene_var].values,
+                adata.var.index.values,
+                adata.var.feature_types.values
+            ]
+        ).T        
 
     df_features.to_csv(
         out_f,
@@ -334,6 +342,7 @@ def main():
             cellbender_out_files[fpr] = file
 
     res_list = []
+    
     for fpr, fil in cellbender_out_files.items():
         # Check to make sure each file exists
         if not os.path.isfile(fil):
@@ -355,6 +364,12 @@ def main():
             options.cb_outfile_tag,
             fpr.replace('.', 'pt')
         )
+        
+        local_outdir_raw = '{}-FPR_{}-unfiltered_10x_mtx'.format(
+            options.cb_outfile_tag,
+            fpr.replace('.', 'pt')
+        )        
+        
         print(local_outdir, fil, local_outdir)
         res_list.append({
             'fpr': fpr,
@@ -367,6 +382,28 @@ def main():
         # Load remove-background output data.
         # We need to do this because of bug here:
         # https://github.com/broadinstitute/CellBender/issues/57
+
+        adata_raw = anndata_from_h5(
+            fil.replace('_filtered', '_unfiltered'),
+            analyzed_barcodes_only=False
+        )
+
+        if (adata_raw.X.data < 0).any():
+            adata_raw.X.data[adata_raw.X.data < 0] = 0
+            print("Cellbender produced negative values which we replace with 0s.")
+            with open("Warnings.log", "a") as log_file:  # "a" mode appends to the file
+                log_file.write(f"Cellbender {fpr} unfiltered produced negative values which we replace with 0s.\n")            
+        # Run the conversion function.
+        _ = cellbender_to_tenxmatrix(
+            adata_raw,
+            out_file='',
+            out_dir='{}-FPR_{}-unfiltered_10x_mtx'.format(
+                options.cb_outfile_tag,
+                fpr.replace('.', 'pt')
+            )
+        )
+        del adata_raw
+          
         try:
             adata = anndata_from_h5(
                 fil,
@@ -378,9 +415,14 @@ def main():
                 fil,
                 analyzed_barcodes_only=False
             )
-        print(adata)
-
-        # Run the conversion function.
+            
+        if (adata.X.data < 0).any():
+            adata.X.data[adata.X.data < 0] = 0
+            print("Cellbender produced negative values which we replace with 0s.")
+            with open("Warnings.log", "a") as log_file:  # "a" mode appends to the file
+                log_file.write(f"Cellbender {fpr} filtered produced negative values which we replace with 0s.\n")
+            
+            
         _ = cellbender_to_tenxmatrix(
             adata,
             out_file='',
@@ -389,6 +431,8 @@ def main():
                 fpr.replace('.', 'pt')
             )
         )
+
+
 
     # Now write the output file
     df = pd.DataFrame(res_list)

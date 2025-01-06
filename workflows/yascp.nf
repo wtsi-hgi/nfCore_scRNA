@@ -16,7 +16,7 @@ include { CREATE_ARTIFICIAL_BAM_CHANNEL } from "$projectDir/modules/local/create
 include {MERGE_SAMPLES} from "$projectDir/modules/nf-core/modules/merge_samples/main"
 include {dummy_filtered_channel} from "$projectDir/modules/nf-core/modules/merge_samples/functions"
 include {MULTIPLET} from "$projectDir/subworkflows/doublet_detection"
-include { SPLIT_CITESEQ_GEX; SPLIT_CITESEQ_GEX as SPLIT_CITESEQ_GEX_FILTERED; SPLIT_CITESEQ_GEX as PREPOCESS_FILES; HASTAG_DEMULTIPLEX } from '../modules/nf-core/modules/citeseq/main'
+include { SPLIT_CITESEQ_GEX; SPLIT_CITESEQ_GEX as SPLIT_CITESEQ_GEX_FILTERED;SPLIT_CITESEQ_GEX as SPLIT_CITESEQ_GEX_FILTERED_NOCB;SPLIT_CITESEQ_GEX as SPLIT_CITESEQ_GEX_NOCB; SPLIT_CITESEQ_GEX as PREPOCESS_FILES; HASTAG_DEMULTIPLEX } from '../modules/nf-core/modules/citeseq/main'
 include { GENOTYPE_MATCHER } from "$projectDir/modules/nf-core/modules/vireo/main"
 include { RETRIEVE_RECOURSES } from "$projectDir/subworkflows/local/retrieve_recourses"
 include { PREPROCESS_GENOME } from "$projectDir/modules/nf-core/modules/subset_bam_per_barcodes_and_variants/main"
@@ -85,35 +85,37 @@ workflow YASCP {
                 ch_experimentid_paths10x_raw = prepare_inputs.out.ch_experimentid_paths10x_raw
                 ch_experiment_filth5 = ch_experimentid_paths10x_filtered = prepare_inputs.out.ch_experimentid_paths10x_filtered
 
-
-                if (params.citeseq){
-                    // If citeseq data is present in the 10x mtx then we strip it before the ambient rna correction.
-                    SPLIT_CITESEQ_GEX( prepare_inputs.out.ch_experimentid_paths10x_raw,'raw')
-                    // if we have multiplexing capture file then we proceed with hastag deconvolution
-                    SPLIT_CITESEQ_GEX.out.multiplexing_capture_channel_for_demultiplexing
-                        .map { sample_name, path1, path2 ->
-                            def directories = path1.findAll { it.isDirectory() }
-                            tuple(sample_name, directories, path2)
-                        }
-                        .set { filtered_multiplexing_capture_channel }
-                    HASTAG_DEMULTIPLEX(filtered_multiplexing_capture_channel)
-                    hastag_labels = HASTAG_DEMULTIPLEX.out.results
-                    SPLIT_CITESEQ_GEX_FILTERED(prepare_inputs.out.ch_experimentid_paths10x_filtered,'filterd')
-                    
-                    ch_experimentid_paths10x_raw = SPLIT_CITESEQ_GEX.out.gex_data
-                    channel__file_paths_10x=SPLIT_CITESEQ_GEX_FILTERED.out.channel__file_paths_10x
-                    channel__file_paths_10x_single=SPLIT_CITESEQ_GEX_FILTERED.out.gex_data
-                    ch_experiment_filth5 = SPLIT_CITESEQ_GEX.out.gex_data
+                
+                // here we run CB with citeseq
+                if (params.cellbender_with_citeseq){
+                    log.info ' ---- Running cellbender with citeseq ---'
+                    SPLIT_CITESEQ_GEX_FILTERED_NOCB(prepare_inputs.out.ch_experimentid_paths10x_filtered,'filterd')
+                    SPLIT_CITESEQ_GEX_NOCB( prepare_inputs.out.ch_experimentid_paths10x_raw,'raw')
                 }else{
-                    hastag_labels = Channel.of()
+                    // If citeseq data is present in the 10x mtx then we strip it before the ambient rna correction.
+                    SPLIT_CITESEQ_GEX_FILTERED(prepare_inputs.out.ch_experimentid_paths10x_filtered,'filterd')
+                    SPLIT_CITESEQ_GEX( prepare_inputs.out.ch_experimentid_paths10x_raw,'raw')
+                    ch_experimentid_paths10x_raw = SPLIT_CITESEQ_GEX.out.gex_data
                 }
+
+
 
                 // Either run ambient RNA removal with cellbender or use cellranger filtered reads (cellbender|cellranger)
                 if (params.input == 'cellbender'){
                     // Here we are using the existing cellbender from a different run, Nothe that the structure of the cellbender folder should be same as produced by this pipeline.
                     log.info ' ---- using existing cellbender output for deconvolution---'
+
+                    // here we either run ambient RNA removal with citeseq counts or without.
                     ambient_RNA( ch_experimentid_paths10x_raw,
                         ch_experimentid_paths10x_filtered,prepare_inputs.out.channel__metadata)
+
+                    // here we run CB with citeseq
+                    if (params.cellbender_with_citeseq){
+                        SPLIT_CITESEQ_GEX_FILTERED(ambient_RNA.out.cellbender_path,'filterd_after_cb')
+                        SPLIT_CITESEQ_GEX( ambient_RNA.out.cellbender_path_raw,'raw_after_cb')
+                        ch_experimentid_paths10x_raw = SPLIT_CITESEQ_GEX.out.gex_data
+                    }
+
                     DECONV_INPUTS(ambient_RNA.out.cellbender_path,prepare_inputs)
 
                     channel__file_paths_10x = DECONV_INPUTS.out.channel__file_paths_10x
@@ -132,9 +134,25 @@ workflow YASCP {
                 }
 
 
-                PREPOCESS_FILES( channel__file_paths_10x_single,'preprocess')
-                channel__file_paths_10x_gex = PREPOCESS_FILES.out.channel__file_paths_10x
-                gex_h5ad = PREPOCESS_FILES.out.gex_h5ad
+                // if we have multiplexing capture file then we proceed with hastag deconvolution
+                SPLIT_CITESEQ_GEX.out.multiplexing_capture_channel_for_demultiplexing
+                    .map { sample_name, path1, path2 ->
+                        def directories = path1.findAll { it.isDirectory() }
+                        tuple(sample_name, directories, path2)
+                    }
+                    .set { filtered_multiplexing_capture_channel }
+                HASTAG_DEMULTIPLEX(filtered_multiplexing_capture_channel)
+                hastag_labels = HASTAG_DEMULTIPLEX.out.results
+                
+                
+                channel__file_paths_10x=SPLIT_CITESEQ_GEX_FILTERED.out.channel__file_paths_10x
+                channel__file_paths_10x_single=SPLIT_CITESEQ_GEX_FILTERED.out.gex_data
+                ch_experiment_filth5 = SPLIT_CITESEQ_GEX.out.gex_data
+
+
+                // PREPOCESS_FILES( channel__file_paths_10x_single,'preprocess')
+                channel__file_paths_10x_gex = SPLIT_CITESEQ_GEX_FILTERED.out.channel__file_paths_10x
+                gex_h5ad = SPLIT_CITESEQ_GEX_FILTERED.out.gex_h5ad
                 
 
 

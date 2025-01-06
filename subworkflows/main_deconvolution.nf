@@ -384,20 +384,20 @@ workflow  main_deconvolution {
         }
 
         // collect file paths to h5ad files in tsv tables:
-        header_seed="experiment_id\tdonor\th5ad_filepath"
-        collect_file2(SPLIT_DONOR_H5AD.out.donors_h5ad_tsv.collect(),"donors_h5ad.tsv",0,0,header_seed)
+        // header_seed="experiment_id\tdonor\th5ad_filepath"
+        // collect_file2(SPLIT_DONOR_H5AD.out.donors_h5ad_tsv.collect(),"donors_h5ad.tsv",0,0,header_seed)
 
-        header_seed="experiment_id\th5ad_filepath"
-        collect_file3(SPLIT_DONOR_H5AD.out.exp__donors_h5ad_tsv.collect(),"exp__donors_h5ad.tsv",0,0,header_seed)
+        // header_seed="experiment_id\th5ad_filepath"
+        // collect_file3(SPLIT_DONOR_H5AD.out.exp__donors_h5ad_tsv.collect(),"exp__donors_h5ad.tsv",0,0,header_seed)
 
-        header_seed="experiment_id\tdonor\th5ad_filepath"
-        collect_file4(SPLIT_DONOR_H5AD.out.donors_h5ad_assigned_tsv.collect(),"donors_h5ad_assigned.tsv",0,0,header_seed)
+        // header_seed="experiment_id\tdonor\th5ad_filepath"
+        // collect_file4(SPLIT_DONOR_H5AD.out.donors_h5ad_assigned_tsv.collect(),"donors_h5ad_assigned.tsv",0,0,header_seed)
 
         header_seed="experiment_id\th5ad_filepath"
         out_h5ad = collect_file5(SPLIT_DONOR_H5AD.out.exp__donors_h5ad_assigned_tsv.collect(),"exp__donors_h5ad_assigned.tsv",0,0,header_seed)
 
-        header_seed="experiment_id\th5ad_filepath"
-        collect_file6(SPLIT_DONOR_H5AD.out.h5ad_tsv.collect(),"cellranger_as_h5ad.tsv",0,0,header_seed)
+        // header_seed="experiment_id\th5ad_filepath"
+        // collect_file6(SPLIT_DONOR_H5AD.out.h5ad_tsv.collect(),"cellranger_as_h5ad.tsv",0,0,header_seed)
 
         header_seed="experiment_id\tdonor\tn_cells"
         ch_vireo_donor_n_cells_tsv = collect_file7(REPLACE_GT_DONOR_ID2.out.sample_summary_tsv.collect(),"vireo_donor_n_cells.tsv",0,0,header_seed)

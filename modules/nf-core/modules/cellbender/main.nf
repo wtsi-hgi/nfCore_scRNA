@@ -8,7 +8,7 @@ include {
 } from "./functions.nf"
 
 // Set default parameters.
-outdir           = "${params.outdir}/nf-preprocessing"
+outdir           = "${params.outdir}/preprocessing"
 
 workflow CELLBENDER {
     take:
@@ -129,11 +129,13 @@ workflow CELLBENDER {
         results_list = cellbender__preprocess_output.out.out_paths
         // prepeare the output channel for utilising in the deconvolution instead of barcode input.
         cellbender_path = cellbender__preprocess_output.out.alternative_input
+        cellbender_path_raw = cellbender__preprocess_output.out.alternative_input_raw
         cellbender_downstream = cellbender__remove_background.out.cb_to_use_downstream
         emit:
             // results_list //results list is not needed to be emited - if done it will wait for all the cellbender stuff to finish.
             cellbender_path
             cellbender_downstream
+            cellbender_path_raw
 
             
 }

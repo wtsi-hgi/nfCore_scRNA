@@ -2,13 +2,23 @@ process collect_file{
   label 'process_tiny'
   if (workflow.containerEngine == 'singularity' && !params.singularity_pull_docker_container) {
     container "${params.nf_scrna_qc_sif_container}"
-    //// container "/lustre/scratch123/hgi/projects/ukbb_scrna/pipelines/singularity_images/wtsihgi_nf_cellbender_v1.2.img"
   } else {
     container "wtsihgi/nf_scrna_qc:6bb6af5"
   }
     // In nf there is a function collectFile - however if you provide a symlinked file directory tusing nf function will overwrite the source instead of replacing the file
     // This snipped is a replication of the function but as a nf module and hence the problem is avoided.
-  publishDir "${outpath}/",  mode: "${params.copy_mode}", overwrite: true
+
+  publishDir  "${outpath2}/",
+              saveAs: {filename ->
+                  if ("${outpath}" == "0") {
+                      null
+                  }else {
+                      filename
+                  }
+              },
+              mode: "${params.copy_mode}",
+              overwrite: "true"
+
   input:
     path(files_to_concentrate)
     val(name)
@@ -17,9 +27,16 @@ process collect_file{
     val(seed)
    
   output:
-    // tuple val(pool_id), path("${vireo_fixed_vcf}"), path("${vireo_fixed_vcf}.tbi"), emit: gt_pool
     path("${name}"),emit:output_collection
+
+  
   script:
+
+    if ("${outpath}" == "0") {
+        outpath2="${params.outdir}"
+    }else {
+        outpath2=outpath
+    }
     file1 = files_to_concentrate[0]
     files= files_to_concentrate.join(" ")
     if (seed!='' ){
