@@ -23,6 +23,42 @@ import click
 import logging
 import os
 import re
+import pandas as pd
+
+# Function to check if the index contains ENSG values
+# Function to check if the index contains ENSG values
+def contains_ensg(index):
+    return pd.Series(list(index)).str.contains(r"^ENSG[0-9]", na=False,regex=True).any()
+
+# Function to ensure ENSG values are in the index
+def ensure_ensg_index(adata):
+    # Identify the column to use for ENSG values
+    # Step 1: Determine which column to fallback to
+    if 'gene_symbols' in adata.var.columns:
+        fallback_var = 'gene_symbols'
+    elif 'gene_ids' in adata.var.columns:
+        fallback_var = 'gene_ids'
+    else:
+        raise ValueError("Neither 'gene_symbols' nor 'gene_ids' are available in adata.var.")
+
+    # Step 2: Check if the current index contains ENSG values
+    if contains_ensg(adata.var.index):
+        print("Index already contains ENSG values. No changes made.")
+        return adata  # ENSG values already present, nothing to change
+
+    # Step 3: Check if the fallback column contains ENSG values
+    if contains_ensg(adata.var[fallback_var]):
+        print(f"Swapping index with ENSG values from '{fallback_var}'.")
+        # Explicitly swap the values
+        original_index = adata.var.index.copy()
+        original_fallback_val = adata.var[fallback_var].values.copy()
+        adata.var.index = original_fallback_val
+        adata.var[fallback_var] = original_index
+    else:
+        print(f"No ENSG values found in index or '{fallback_var}'. No changes made.")
+
+    return adata
+
 compression_opts = 'gzip'
 filter_0_count_cells=False
 
@@ -298,6 +334,8 @@ def main():
     adata_cellranger_filtered = sc.read_10x_mtx(
         options.raw_data, var_names='gene_symbols', make_unique=True,
         cache=False, cache_compression=compression_opts,gex_only=False)
+    
+    adata_cellranger_filtered  = ensure_ensg_index(adata_cellranger_filtered)
     all_feature_types = set(adata_cellranger_filtered.var['feature_types'])
     hashtags = set(options.hastag_labels.split(","))
     hashtags = ['Hashtag_.*']

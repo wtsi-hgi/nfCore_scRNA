@@ -679,6 +679,10 @@ def scanpy_merge(
             ],
             inplace=True
         )
+        adata_merged.obs['pct_counts_gene_group__mito_transcript'].fillna(0, inplace=True)
+        adata_merged.obs['pct_counts_gene_group__mito_protein'].fillna(0, inplace=True)
+        adata_merged.obs['pct_counts_gene_group__ribo_rna'].fillna(0, inplace=True)
+        adata_merged.obs['pct_counts_gene_group__ribo_protein'].fillna(0, inplace=True)
     except:
         _='most likely different data format such as ATAC which doesnt have gene IDs'
     # adata_merged.obs = obs_prior

@@ -88,7 +88,7 @@ def perform_adaptiveQC_Filtering(clf,adata,method,metadata_columns):
         predicted_scores = clf.negative_outlier_factor_
     elif method == 'IsolationForest':
         f = clf.fit_predict(
-            adata.obs[metadata_columns].values
+            adata2.obs['pct_counts_gene_group__mito_transcript'].values
         ) == 1
         predicted_scores = clf.decision_function(adata.obs[metadata_columns].values) 
     elif method == 'MAD':
@@ -312,6 +312,7 @@ def main():
 
     # Load the AnnData file.
     adata = sc.read_h5ad(filename=options.h5)
+    adata2 = sc.read_h5ad(filename='/lustre/scratch123/hgi/teams/hgi/mo11/tmp_projects/ania/analysis_trego_2025/results_cb3/handover/merged_h5ad/1.pre_QC_adata.h5ad')
     adata.obs['cell_id'] = adata.obs.index
     
     # Here we add an adaptive QC per Column
