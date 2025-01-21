@@ -389,7 +389,7 @@ if __name__ == "__main__":
     #     exta_snps=pd.concat([exta_snps,all_sites])
     # All_Extra_informative_Sites = exta_snps.drop_duplicates()
     informative_sites = headers_all.loc[list(all_informative_site_index)]
-    constant_sites = headers_all.loc[set(headers_all.index) - all_informative_site_index]
+    constant_sites = headers_all.loc[list(set(headers_all.index) - all_informative_site_index)]
     constant_sites = constant_sites.drop_duplicates(subset=['#CHROM', 'POS'])
     constant_sites.index=constant_sites['#CHROM']+'_'+constant_sites['POS']
     

@@ -147,7 +147,7 @@ workflow YASCP {
                 
                 channel__file_paths_10x=SPLIT_CITESEQ_GEX_FILTERED.out.channel__file_paths_10x
                 channel__file_paths_10x_single=SPLIT_CITESEQ_GEX_FILTERED.out.gex_data
-                ch_experiment_filth5 = SPLIT_CITESEQ_GEX.out.gex_data
+                ch_experiment_filth5 = SPLIT_CITESEQ_GEX_FILTERED.out.gex_data
 
 
                 // PREPOCESS_FILES( channel__file_paths_10x_single,'preprocess')
@@ -220,7 +220,7 @@ workflow YASCP {
                 log.info '''----Skipping Preprocessing since we already have prepeared h5ad input file----'''
                 file__anndata_merged = Channel.from(params.file__anndata_merged)
                 assignments_all_pools = Channel.from("$projectDir/assets/fake_file.fq")
-
+                hastag_labels = Channel.from("$projectDir/assets/fake_file.fq")
                 if (params.citeseq){
 
                     vireo_paths = params.outdir

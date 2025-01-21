@@ -15,7 +15,109 @@ import scvi
 import argparse
 import glob
 import pandas as pd
+import os
 
+COLORS_LARGE_PALLETE = [
+    '#0F4A9C', '#3F84AA', '#C9EBFB', '#8DB5CE', '#C594BF', '#DFCDE4',
+    '#B51D8D', '#6f347a', '#683612', '#B3793B', '#357A6F', '#989898',
+    '#CE778D', '#7F6874', '#E09D37', '#FACB12', '#2B6823', '#A0CC47',
+    '#77783C', '#EF4E22', '#AF1F26'
+]
+
+def save_plot(
+    adata,
+    out_file_base,
+    color_var,
+    colors_quantitative=True,
+    colors_large_palette=COLORS_LARGE_PALLETE,
+):
+    
+        
+    def panel_grid(hspace, wspace, ncols, num_panels):
+        """Init plot."""
+        n_panels_x = min(ncols, num_panels)
+        n_panels_y = np.ceil(num_panels / n_panels_x).astype(int)
+        if wspace is None:
+            #  try to set a wspace that is not too large or too small given the
+            #  current figure size
+            wspace = 0.75 / rcParams['figure.figsize'][0] + 0.02
+        # each panel will have the size of rcParams['figure.figsize']
+        fig = plt.figure(
+            figsize=(
+                n_panels_x * rcParams['figure.figsize'][0] * (1 + wspace),
+                n_panels_y * rcParams['figure.figsize'][1],
+            )
+        )
+        left = 0.2 / n_panels_x
+        bottom = 0.13 / n_panels_y
+        gs = gridspec.GridSpec(
+            nrows=n_panels_y,
+            ncols=n_panels_x,
+            left=left,
+            right=1 - (n_panels_x - 1) * left - 0.01 / n_panels_x,
+            bottom=bottom,
+            top=1 - (n_panels_y - 1) * bottom - 0.1 / n_panels_y,
+            hspace=hspace,
+            wspace=wspace
+        )
+        return fig, gs
+
+    fig, grid = panel_grid(
+        hspace=0.125*2,
+        wspace=None,
+        ncols=4,
+        num_panels=2
+    )
+    ax = plt.subplot(grid[0])
+    # sc.pl.umap(
+    #     SLEmap,
+    #     color=["Azimuth:predicted.celltype.l1","Azimuth:predicted.celltype.l2"],
+    #     # Setting a smaller point size to get prevent overlap
+    #     size=0.7,save='plots.pdf'
+    # )
+
+    # fig.savefig(
+    #     'umap.png',
+    #     #dpi=300,
+    #     bbox_inches='tight'
+    # )    
+    
+    """Save a plot."""
+
+
+    if colors_quantitative is False:
+        # Cast to category - required for booleans.
+        adata.obs[color_var] = adata.obs[color_var].astype('category')
+        n_categories = len(adata.obs[color_var].cat.categories)
+        color_palette = None
+        if n_categories <= len(plt.get_cmap('Dark2').colors):
+            color_palette = 'Dark2'
+        elif n_categories <= len(colors_large_palette):
+            color_palette = colors_large_palette
+    else:
+        # Make sure that the numeric value is actually numeric
+        adata.obs[color_var] = adata.obs[color_var].astype('double')
+    legend_loc = 'right margin'
+    color_palette = 'viridis'
+    sc.pl.umap(
+        adata=adata,
+        color=color_var,
+        palette=color_palette,
+        alpha=0.4,
+        title=color_var,
+        show=False,
+        ax=ax 
+    )
+    try:
+        os.mkdir(f"{out_file_base}")
+    except:
+        _='exists'
+        
+    fig.savefig(
+        f'{out_file_base}/{color_var}-umap.png',
+        dpi=300,
+        bbox_inches='tight'
+    )
 
 
 # This code will gather the most important graphs and place them in a summary folder.
@@ -33,7 +135,47 @@ parser.add_argument(
         help='Input h5ad_file after normalisation'
 )
 
+parser.add_argument(
+    '-cq', '--colors_quantitative',
+    action='store',
+    dest='cq',
+    default='',
+    help='Comma seperated list of quantitative variable names for colors.\
+        (default: "")'
+)
 
+parser.add_argument(
+    '-cc', '--colors_categorical',
+    action='store',
+    dest='cc',
+    default='',
+    help='Comma seperated list of categorical variable names for colors.\
+        (default: "")'
+)
+
+parser.add_argument(
+    '-reduction_columns_cells', '--reduction_columns_cells',
+    action='store',
+    dest='reduction_columns_cells',
+    default='cell_passes_qc,cell_passes_hard_filters',
+    help='reduction_columns_cells'
+)
+
+parser.add_argument(
+    '-reduction_columns_genes', '--reduction_columns_genes',
+    action='store',
+    dest='reduction_columns_genes',
+    default='highly_variable',
+    help='reduction_columns_genes'
+)
+
+parser.add_argument(
+    '-gene_list_to_keep', '--gene_list_to_keep',
+    action='store',
+    dest='gene_list_to_keep',
+    default='fake_fileinput.tsv',
+    help='gene_list_to_keep'
+)
 
 options = parser.parse_args()
 
@@ -58,11 +200,35 @@ SLEmap.obs = SLEmap.obs.merge(CITE, left_on=['Barcode'],right_index=True,how='le
 CITE_2 = SLEmap.obs[CITE.columns].copy()
 SLEmap.obsm['protein_expression'] = CITE_2
 
-# keep only cells passing QC and highly variable genes
-SLEmap = SLEmap[
-    (SLEmap.obs["cell_passes_qc"] & SLEmap.obs["cell_passes_hard_filters"]),
-    SLEmap.var["highly_variable"]
-]
+cell_filters = options.reduction_columns_cells.split(';')
+number_of_cell_filters = len(cell_filters)
+
+gene_filters = options.reduction_columns_genes.split(';')
+number_of_gene_filters = len(gene_filters)
+
+if f"{options.gene_list_to_keep}"=='fake_fileinput.tsv':
+    gene_list_to_keep = None
+else:
+    gene_list_to_keep = pd.read_csv(f"{options.gene_list_to_keep}",sep='\t')
+
+
+# Combine cell filters dynamically
+cell_condition = SLEmap.obs[cell_filters[0]]
+for filter_name in cell_filters[1:]:
+    cell_condition &= SLEmap.obs[filter_name]
+
+# Combine gene filters dynamically
+gene_condition = SLEmap.var[gene_filters[0]]
+for filter_name in gene_filters[1:]:
+    gene_condition &= SLEmap.var[filter_name]
+
+# Add gene list filter if provided
+if gene_list_to_keep is not None:
+    gene_condition &= SLEmap.var_names.isin(gene_list_to_keep)
+
+# Subset the dataset
+SLEmap = SLEmap[cell_condition, gene_condition]
+
 
 #run totalVI
 SLEmap = SLEmap.to_memory().copy()
@@ -83,58 +249,37 @@ rna, protein = model.get_normalized_expression(n_samples=25,return_mean=True)
 SLEmap.obsm["denoised_protein"] = protein
 
 sc.pp.neighbors(SLEmap, use_rep="X_totalVI",n_neighbors=15)
-sc.tl.umap(SLEmap)
 
+sc.tl.umap(SLEmap)
 
 sc.set_figure_params(figsize=(5,5), dpi=150)
 
-def panel_grid(hspace, wspace, ncols, num_panels):
-    """Init plot."""
-    n_panels_x = min(ncols, num_panels)
-    n_panels_y = np.ceil(num_panels / n_panels_x).astype(int)
-    if wspace is None:
-        #  try to set a wspace that is not too large or too small given the
-        #  current figure size
-        wspace = 0.75 / rcParams['figure.figsize'][0] + 0.02
-    # each panel will have the size of rcParams['figure.figsize']
-    fig = plt.figure(
-        figsize=(
-            n_panels_x * rcParams['figure.figsize'][0] * (1 + wspace),
-            n_panels_y * rcParams['figure.figsize'][1],
+
+
+colors_quantitative = options.cq.split(',')
+colors_categorical = options.cc.split(',')
+adata = SLEmap
+for color_var in colors_quantitative:
+    try:       
+        save_plot(
+            adata=adata,
+            out_file_base="figures",
+            color_var=color_var,
+            colors_quantitative=True,
         )
-    )
-    left = 0.2 / n_panels_x
-    bottom = 0.13 / n_panels_y
-    gs = gridspec.GridSpec(
-        nrows=n_panels_y,
-        ncols=n_panels_x,
-        left=left,
-        right=1 - (n_panels_x - 1) * left - 0.01 / n_panels_x,
-        bottom=bottom,
-        top=1 - (n_panels_y - 1) * bottom - 0.1 / n_panels_y,
-        hspace=hspace,
-        wspace=wspace
-    )
-    return fig, gs
-
-fig, grid = panel_grid(
-    hspace=0.125*2,
-    wspace=None,
-    ncols=4,
-    num_panels=2
-)
-
-sc.pl.umap(
-    SLEmap,
-    color=["Azimuth:predicted.celltype.l1","Azimuth:predicted.celltype.l2"],
-    # Setting a smaller point size to get prevent overlap
-    size=0.7,save='plots.pdf'
-)
-
-fig.savefig(
-    'umap.png',
-    #dpi=300,
-    bbox_inches='tight'
-)
+    except:
+        print(f'{color_var} doesnt')
+        
+for color_var in colors_categorical:
+    
+    try:
+        save_plot(
+            adata=adata,
+            out_file_base="figures",
+            color_var=color_var,
+            colors_quantitative=False,
+        )
+    except:
+        print(f'{color_var} doesnt')
 
 SLEmap.write("./totalVI_integrated.h5ad")

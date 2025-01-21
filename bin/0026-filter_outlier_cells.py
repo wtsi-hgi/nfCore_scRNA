@@ -88,7 +88,7 @@ def perform_adaptiveQC_Filtering(clf,adata,method,metadata_columns):
         predicted_scores = clf.negative_outlier_factor_
     elif method == 'IsolationForest':
         f = clf.fit_predict(
-            adata2.obs['pct_counts_gene_group__mito_transcript'].values
+            adata.obs[metadata_columns].values
         ) == 1
         predicted_scores = clf.decision_function(adata.obs[metadata_columns].values) 
     elif method == 'MAD':
@@ -144,21 +144,27 @@ def generate_plots(adata,cell_qc_column,metadata_columns,metadata_columns_origin
         height=2.5,
         diag_sharey=False
     )
-    sns_plot.map_upper(
-        sns.kdeplot,
-        cmap="viridis",
-        shade=True
-    )
+    try:
+        sns_plot.map_upper(
+            sns.kdeplot,
+            cmap="viridis",
+            shade=True
+        )
+    except:
+        print("Skipping map_upper due to insufficient data.")
     sns_plot.add_legend()
     for lh in sns_plot._legend.legendHandles:
         lh.set_alpha(1)
         lh._sizes = [50]
     sns_plot.map_diag(sns.kdeplot)
-    sns_plot.map_lower(
-        sns.kdeplot,
-        cmap="viridis",
-        shade=True
-    )
+    try:
+        sns_plot.map_lower(
+            sns.kdeplot,
+            cmap="viridis",
+            shade=True
+        )
+    except:
+        print("Skipping map_lower due to insufficient data.")
     sns_plot.savefig(f'{of}-cell_desity__{cell_qc_column}.png')
     
             
@@ -312,7 +318,6 @@ def main():
 
     # Load the AnnData file.
     adata = sc.read_h5ad(filename=options.h5)
-    adata2 = sc.read_h5ad(filename='/lustre/scratch123/hgi/teams/hgi/mo11/tmp_projects/ania/analysis_trego_2025/results_cb3/handover/merged_h5ad/1.pre_QC_adata.h5ad')
     adata.obs['cell_id'] = adata.obs.index
     
     # Here we add an adaptive QC per Column
@@ -558,8 +563,10 @@ def main():
                 index=False,
                 header=True
             )
-            
-            generate_plots(adata,cell_qc_column,metadata_columns,metadata_columns_original,options.of)
+            try:
+                generate_plots(adata,cell_qc_column,metadata_columns,metadata_columns_original,options.of)
+            except:
+                print("plotting failed")
 
     
     # adata.write(

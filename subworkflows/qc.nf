@@ -93,7 +93,14 @@ workflow qc {
 
 
                 if(params.totalVi.run_process){
-                    TOTAL_VI_INTEGRATION(NORMALISE_AND_PCA.out.anndata,DSB_PROCESS.out.citeseq_rsd.collect(),NORMALISE_AND_PCA.out.outdir)
+                    TOTAL_VI_INTEGRATION(NORMALISE_AND_PCA.out.anndata,
+                    DSB_PROCESS.out.citeseq_rsd.collect(),
+                    NORMALISE_AND_PCA.out.outdir, 
+                    params.umap.colors_quantitative.value, 
+                    params.umap.colors_categorical.value, 
+                    params.totalVi.reduction_columns_cells,
+                    params.totalVi.reduction_columns_genes,
+                    params.totalVi.gene_list_to_keep)
                 }
 
 
@@ -102,8 +109,8 @@ workflow qc {
                 // PREPROCESS_PROCESS()
                 // DSB_PROCESS.out.citeseq_rsd.subscribe { println "1:: DSB_PROCESS.out.citeseq_rsd: $it" }
                 vireo_paths_map = vireo_paths.flatten().map{row->tuple("${row}".replaceFirst(/.*vireo_/,""), row)}
-                vireo_paths_map.subscribe { println "1:: vireo_paths_map $it" }
-                DSB_PROCESS.out.ch_for_norm.subscribe { println "1:: vireo_paths_map $it" }
+                // vireo_paths_map.subscribe { println "1:: vireo_paths_map $it" }
+                // DSB_PROCESS.out.ch_for_norm.subscribe { println "1:: vireo_paths_map $it" }
                 vireo_paths_map.combine(DSB_PROCESS.out.ch_for_norm, by: 0).set{norm_chanel}
                 norm_chanel.combine(matched_donors).set{inp4}
                 PREPROCESS_PROCESS(inp4,params.reduced_dims.vars_to_regress.value)

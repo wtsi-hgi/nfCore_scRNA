@@ -39,7 +39,7 @@ workflow CELL_TYPE_ASSIGNEMT{
             AZIMUTH(params.outdir,ch_batch_files)
             az_out = AZIMUTH.out.predicted_celltype_labels.collect()
         }else{
-            az_out = Channel.of()
+            az_out = Channel.of("$projectDir/assets/fake_file2.fq")
         }
 
         if (params.celltype_assignment.run_celltypist){
