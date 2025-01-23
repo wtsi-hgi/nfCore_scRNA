@@ -184,21 +184,23 @@ sc.set_figure_params(figsize=(5,5), dpi=150)
 #import single cell data and CITE-seq data
 # SLEmap = sc.read('adata-normalized.h5ad')
 SLEmap = sc.read(options.h5ad_file, backed ='r')
-
-all_cite_files = glob.glob("./*/*.matrix.csv")
+SLEmap.obs["Barcode"] = SLEmap.obs.index.str.split('__').str[0]
+all_cite_files = glob.glob("./*Antibody_Capture.tsv")
 CITE = pd.DataFrame()
 for f1 in all_cite_files:
-    c1 = pd.read_csv(f1,index_col=0)
+    c1 = pd.read_csv(f1,index_col=0,sep='\t')
+    c1.index = c1.index+'-'+f1.split('__Antibody_Capture')[0].split('/')[-1]
+    c1 = c1.loc[list(set(c1.index).intersection(set(SLEmap.obs["Barcode"])))]
     CITE=pd.concat([CITE,c1])
 
 # merge citeseq data to obs of single cell data 
-SLEmap.obs["Barcode"] = SLEmap.obs.index.str.split('__').str[0]
+
 SLEmap.obs = SLEmap.obs.merge(CITE, left_on=['Barcode'],right_index=True,how='left', indicator=True)
 
 
 # make citeseq data to obsm single cell data : required for totalVI
 CITE_2 = SLEmap.obs[CITE.columns].copy()
-SLEmap.obsm['protein_expression'] = CITE_2
+SLEmap.obsm['protein_expression'] = CITE_2.fillna(0)
 
 cell_filters = options.reduction_columns_cells.split(';')
 number_of_cell_filters = len(cell_filters)
@@ -232,8 +234,13 @@ SLEmap = SLEmap[cell_condition, gene_condition]
 
 #run totalVI
 SLEmap = SLEmap.to_memory().copy()
+try:
+    SLEmap.X = SLEmap.layers['counts']
+except:
+    _='proceed'
 scvi.model.TOTALVI.setup_anndata(SLEmap, protein_expression_obsm_key="protein_expression",batch_key="experiment_id")
 model = scvi.model.TOTALVI(SLEmap,latent_distribution="normal",n_layers_decoder=2)
+
 
 model.train()
 model.save("./scvi_model",adata=SLEmap, overwrite=True)

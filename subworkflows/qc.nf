@@ -27,6 +27,7 @@ workflow qc {
         assignments_all_pools
         matched_donors
         chanel_cr_outs
+        ab_data_tsv
     main:
         log.info "--- Running QC metrics --- "
         // if(params.extra_metadata!=''){
@@ -94,7 +95,7 @@ workflow qc {
 
                 if(params.totalVi.run_process){
                     TOTAL_VI_INTEGRATION(NORMALISE_AND_PCA.out.anndata,
-                    DSB_PROCESS.out.citeseq_rsd.collect(),
+                    ab_data_tsv,
                     NORMALISE_AND_PCA.out.outdir, 
                     params.umap.colors_quantitative.value, 
                     params.umap.colors_categorical.value, 
@@ -113,9 +114,10 @@ workflow qc {
                 // DSB_PROCESS.out.ch_for_norm.subscribe { println "1:: vireo_paths_map $it" }
                 vireo_paths_map.combine(DSB_PROCESS.out.ch_for_norm, by: 0).set{norm_chanel}
                 norm_chanel.combine(matched_donors).set{inp4}
-                PREPROCESS_PROCESS(inp4,params.reduced_dims.vars_to_regress.value)
-
+                
                 if(params.seurat_integration.run_process){
+                    PREPROCESS_PROCESS(inp4,params.reduced_dims.vars_to_regress.value)
+
                     DSB_INTEGRATE(
                         PREPROCESS_PROCESS.out.tmp_rsd.collect(),
                         params.reduced_dims.vars_to_regress.value,

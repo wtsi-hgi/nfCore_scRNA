@@ -19,6 +19,7 @@ process SPLIT_CITESEQ_GEX {
         tuple val(sample_name), path("${sample_name}__*"), path("*__Multiplexing_Capture.tsv"), emit: multiplexing_capture_channel_for_demultiplexing  optional true
         tuple val(sample_name), path("${sample_name}__Gene_Expression"), emit:gex_data
         tuple val(sample_name), path("antibody-${sample_name}.h5ad"), emit: ab_data2 optional true
+        path('*__Antibody_Capture.tsv'), emit: ab_data_tsv optional true
         tuple val(sample_name), path("Gene_Expression-${sample_name}.h5ad"), emit: gex_h5ad optional true
         path("Gene_Expression-${sample_name}.h5ad"), emit: gex_h5ad_2 optional true
         path("*.tsv"), emit: quants_data optional true

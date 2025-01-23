@@ -91,13 +91,15 @@ workflow YASCP {
                     log.info ' ---- Running cellbender with citeseq ---'
                     SPLIT_CITESEQ_GEX_FILTERED_NOCB(prepare_inputs.out.ch_experimentid_paths10x_filtered,'filterd')
                     SPLIT_CITESEQ_GEX_NOCB( prepare_inputs.out.ch_experimentid_paths10x_raw,'raw')
+                    ab_data_tsv = SPLIT_CITESEQ_GEX_NOCB.out.ab_data_tsv.collect()
                 }else{
                     // If citeseq data is present in the 10x mtx then we strip it before the ambient rna correction.
                     SPLIT_CITESEQ_GEX_FILTERED(prepare_inputs.out.ch_experimentid_paths10x_filtered,'filterd')
                     SPLIT_CITESEQ_GEX( prepare_inputs.out.ch_experimentid_paths10x_raw,'raw')
                     ch_experimentid_paths10x_raw = SPLIT_CITESEQ_GEX.out.gex_data
+                    ab_data_tsv = SPLIT_CITESEQ_GEX.out.ab_data_tsv.collect()
                 }
-
+                
 
 
                 // Either run ambient RNA removal with cellbender or use cellranger filtered reads (cellbender|cellranger)
@@ -290,7 +292,7 @@ workflow YASCP {
                     gt_outlier_input = Channel.from("$projectDir/assets/fake_file.fq")
                 }
 
-                qc(file__anndata_merged,file__cells_filtered,gt_outlier_input,channel_dsb,vireo_paths,assignments_all_pools,matched_donors,chanel_cr_outs) //This runs the Clusterring and qc assessments of the datasets.
+                qc(file__anndata_merged,file__cells_filtered,gt_outlier_input,channel_dsb,vireo_paths,assignments_all_pools,matched_donors,chanel_cr_outs,ab_data_tsv) //This runs the Clusterring and qc assessments of the datasets.
                 process_finish_check_channel = qc.out.LI
                 file__anndata_merged = qc.out.file__anndata_merged
             }else{

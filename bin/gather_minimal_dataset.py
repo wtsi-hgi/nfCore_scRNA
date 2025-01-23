@@ -340,7 +340,9 @@ def gather_donor(donor_id, ad, ad_lane_raw, qc_obs, columns_output = COLUMNS_OUT
     except:
         _='already loaded'
     ad.var.index.name = "ensembl_id"
-    ad.raw = ad_lane_raw[ad.obs.index, :]
+    idx_all = list(set(ad.obs.index).intersection(set(ad_lane_raw.obs.index)))
+    ad = ad[idx_all]
+    ad.raw = ad_lane_raw[idx_all]
     if donor_id != "unassigned" and donor_id != "doublet":
 
         dt = qc_obs[qc_obs.donor == donor_id]
@@ -348,7 +350,9 @@ def gather_donor(donor_id, ad, ad_lane_raw, qc_obs, columns_output = COLUMNS_OUT
             dt = dt.set_index(dt['barcode'])
         except:
             _='barcode is already the index'
-        df = pandas.concat([ad.obs, dt], axis = 1, join = 'outer')
+        if len(set(ad.obs.index).intersection(dt.index))<1:
+            dt.index = dt.index+'-'+dt['experiment_id'].astype(str)+'__'+dt['donor'].astype(str)
+        df = pandas.concat([ad.obs, dt], axis = 1, join = 'inner')
         df =df.loc[:,~df.columns.duplicated(keep='last')]
         df['tranche.id']=args.experiment_name
         colnams = list(columns_output.keys())
@@ -718,7 +722,15 @@ def gather_pool(expid, args, df_raw, df_cellbender, adqc, oufh = sys.stdout,lane
     Total_Drroplets_before_10x_filtering = len(set(pd.DataFrame(ad_lane_raw.obs).index))
     Doublets_donor = 0
     Unassigned_donor = 0
-    Cells_before_QC_filters=len(all_QC_lane.obs['cell_passes_qc'])
+    try:
+        Cells_before_QC_filters=len(all_QC_lane.obs['cell_passes_qc'])
+    except:
+        # Cell QC column was not defined, sellecting the first entry as the main.
+        cell_passes_qc = [item for item in all_QC_lane.obs.columns if 'cell_passes_qc' in item and 'score' not in item][0]
+        all_QC_lane.obs['cell_passes_qc']=all_QC_lane.obs[cell_passes_qc]
+        Cells_before_QC_filters=len(all_QC_lane.obs['cell_passes_qc'])
+        adqc.obs['cell_passes_qc']=adqc.obs[cell_passes_qc]
+    
     Cells_passing_QC=len(all_QC_lane.obs[all_QC_lane.obs['cell_passes_qc']])
     Cells_failing_QC=len(all_QC_lane.obs[all_QC_lane.obs['cell_passes_qc']==False])
 
@@ -757,14 +769,23 @@ def gather_pool(expid, args, df_raw, df_cellbender, adqc, oufh = sys.stdout,lane
             Tranche_Failure_Reason +='Mean reads per cell for all cells in pool <=25000; '
     except:
         _='cant validate reasoning'        
-    
-    Summary_check = pd.read_csv(f'{args.results_dir}/deconvolution/vireo_raw/{expid}/vireo_{expid}/summary.tsv',sep='\t')
     try:
-        Doublets_donor = int(Summary_check[Summary_check['Var1']=='doublet']['Freq'].values[0])
+        Summary_check = pd.read_csv(f'{args.results_dir}/deconvolution/vireo_raw/{expid}/vireo_{expid}/donor_ids.tsv',sep='\t')
+    except:
+        try:
+            Summary_check = pd.read_csv(f'{args.results_dir}/deconvolution/vireo_raw/vireo_{expid}/donor_ids.tsv',sep='\t')
+        except:
+            try:
+                Summary_check = pd.read_csv(f'{args.results_dir}/deconvolution/vireo_raw/existing_vireo/{expid}/donor_ids.tsv',sep='\t')
+            except:
+                Summary_check = pd.read_csv(f'{args.results_dir}/deconvolution/vireo_raw/existing_vireo/{expid}/vireo_{expid}/donor_ids.tsv',sep='\t')
+            
+    try:
+        Doublets_donor = len(Summary_check[Summary_check['donor_id']=='doublet'])
     except:
         Doublets_donor = 0
     try:
-        Unassigned_donor = int(Summary_check[Summary_check['Var1']=='unassigned']['Freq'].values[0])
+        Unassigned_donor = len(Summary_check[Summary_check['donor_id']=='unassigned'])
     except:
         Unassigned_donor = 0
     for i in df_donors.index:
@@ -1112,7 +1133,7 @@ if __name__ == '__main__':
         ad = adqc[s]
         if ad.n_obs == 0:
             continue #Here no cells has passed the qc thresholds.
-        nf, data_tranche, data_donor = gather_pool(expid, args, df_raw, df_cellbender, adqc, oufh = oufh, lane_id=count,Resolution=Resolution)
+        nf, data_tranche, data_donor = gather_pool(expid, args, df_raw, df_cellbender, ad, oufh = oufh, lane_id=count,Resolution=Resolution)
         data_tranche_all.append(data_tranche)
         data_donor_all= data_donor_all+data_donor
         count += 1
